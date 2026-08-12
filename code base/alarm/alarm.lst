@@ -1,0 +1,1692 @@
+   1               		.file	"alarm.c"
+   2               	__SP_H__ = 0x3e
+   3               	__SP_L__ = 0x3d
+   4               	__SREG__ = 0x3f
+   5               	__tmp_reg__ = 0
+   6               	__zero_reg__ = 1
+   7               		.text
+   8               	.Ltext0:
+   9               		.cfi_sections	.debug_frame
+  10               	.global	ds1302_init
+  12               	ds1302_init:
+  13               	.LFB6:
+  14               		.file 1 "alarm.c"
+   1:alarm.c       **** #define F_CPU 8000000UL
+   2:alarm.c       **** #include <avr/io.h>
+   3:alarm.c       **** #include <util/delay.h>
+   4:alarm.c       **** #include "lcd.h"
+   5:alarm.c       **** 
+   6:alarm.c       **** // -------------------- DS1302 DEFINITIONS --------------------
+   7:alarm.c       **** #define DS1302_PORT PORTD
+   8:alarm.c       **** #define DS1302_DDR  DDRD
+   9:alarm.c       **** #define DS1302_PIN  PIND
+  10:alarm.c       **** #define DS1302_CLK  PD2
+  11:alarm.c       **** #define DS1302_IO   PD3
+  12:alarm.c       **** #define DS1302_CE   PD6
+  13:alarm.c       **** 
+  14:alarm.c       **** // -------------------- BUTTONS & BUZZER --------------------
+  15:alarm.c       **** #define BTN_SET   PB5
+  16:alarm.c       **** #define BTN_NEXT  PC4
+  17:alarm.c       **** #define BTN_UP    PC5
+  18:alarm.c       **** #define BTN_DOWN  PD7
+  19:alarm.c       **** #define BUZZER    PB4
+  20:alarm.c       **** 
+  21:alarm.c       **** // -------------------- ALARM VARIABLES --------------------
+  22:alarm.c       **** uint8_t alarm1_hour = 12, alarm1_min = 0;
+  23:alarm.c       **** uint8_t alarm2_hour = 12, alarm2_min = 30;
+  24:alarm.c       **** 
+  25:alarm.c       **** // Mode states
+  26:alarm.c       **** enum { MODE_NORMAL, MODE_SET_ALARM1, MODE_SET_ALARM2 };
+  27:alarm.c       **** uint8_t mode = MODE_NORMAL;
+  28:alarm.c       **** uint8_t edit_field = 0; // 0 = hour, 1 = min
+  29:alarm.c       **** 
+  30:alarm.c       **** // -------------------- BUTTON STATE TRACKING --------------------
+  31:alarm.c       **** uint8_t last_btn_set = 0;   
+  32:alarm.c       **** uint8_t last_btn_next = 0;
+  33:alarm.c       **** uint8_t last_btn_up = 0;
+  34:alarm.c       **** uint8_t last_btn_down = 0;
+  35:alarm.c       **** 
+  36:alarm.c       **** // -------------------- DS1302 FUNCTIONS --------------------
+  37:alarm.c       **** void ds1302_init(void) {
+  15               		.loc 1 37 0
+  16               		.cfi_startproc
+  17               	/* prologue: function */
+  18               	/* frame size = 0 */
+  19               	/* stack size = 0 */
+  20               	.L__stack_usage = 0
+  38:alarm.c       ****     DS1302_DDR |= (1 << DS1302_CLK) | (1 << DS1302_CE);
+  21               		.loc 1 38 0
+  22 0000 8AB1      		in r24,0xa
+  23 0002 8464      		ori r24,lo8(68)
+  24 0004 8AB9      		out 0xa,r24
+  39:alarm.c       ****     DS1302_DDR |= (1 << DS1302_IO);
+  25               		.loc 1 39 0
+  26 0006 539A      		sbi 0xa,3
+  40:alarm.c       ****     DS1302_PORT &= ~(1 << DS1302_CLK);
+  27               		.loc 1 40 0
+  28 0008 5A98      		cbi 0xb,2
+  41:alarm.c       ****     DS1302_PORT &= ~(1 << DS1302_CE);
+  29               		.loc 1 41 0
+  30 000a 5E98      		cbi 0xb,6
+  31 000c 0895      		ret
+  32               		.cfi_endproc
+  33               	.LFE6:
+  35               	.global	ds1302_start
+  37               	ds1302_start:
+  38               	.LFB7:
+  42:alarm.c       **** }
+  43:alarm.c       **** 
+  44:alarm.c       **** void ds1302_start(void) { DS1302_PORT |= (1 << DS1302_CE); _delay_us(4); }
+  39               		.loc 1 44 0
+  40               		.cfi_startproc
+  41               	/* prologue: function */
+  42               	/* frame size = 0 */
+  43               	/* stack size = 0 */
+  44               	.L__stack_usage = 0
+  45               		.loc 1 44 0
+  46 000e 5E9A      		sbi 0xb,6
+  47               	.LVL0:
+  48               	.LBB24:
+  49               	.LBB25:
+  50               		.file 2 "/usr/lib/avr/include/util/delay.h"
+   1:/usr/lib/avr/include/util/delay.h **** /* Copyright (c) 2002, Marek Michalkiewicz
+   2:/usr/lib/avr/include/util/delay.h ****    Copyright (c) 2004,2005,2007 Joerg Wunsch
+   3:/usr/lib/avr/include/util/delay.h ****    Copyright (c) 2007  Florin-Viorel Petrov
+   4:/usr/lib/avr/include/util/delay.h ****    All rights reserved.
+   5:/usr/lib/avr/include/util/delay.h **** 
+   6:/usr/lib/avr/include/util/delay.h ****    Redistribution and use in source and binary forms, with or without
+   7:/usr/lib/avr/include/util/delay.h ****    modification, are permitted provided that the following conditions are met:
+   8:/usr/lib/avr/include/util/delay.h **** 
+   9:/usr/lib/avr/include/util/delay.h ****    * Redistributions of source code must retain the above copyright
+  10:/usr/lib/avr/include/util/delay.h ****      notice, this list of conditions and the following disclaimer.
+  11:/usr/lib/avr/include/util/delay.h **** 
+  12:/usr/lib/avr/include/util/delay.h ****    * Redistributions in binary form must reproduce the above copyright
+  13:/usr/lib/avr/include/util/delay.h ****      notice, this list of conditions and the following disclaimer in
+  14:/usr/lib/avr/include/util/delay.h ****      the documentation and/or other materials provided with the
+  15:/usr/lib/avr/include/util/delay.h ****      distribution.
+  16:/usr/lib/avr/include/util/delay.h **** 
+  17:/usr/lib/avr/include/util/delay.h ****    * Neither the name of the copyright holders nor the names of
+  18:/usr/lib/avr/include/util/delay.h ****      contributors may be used to endorse or promote products derived
+  19:/usr/lib/avr/include/util/delay.h ****      from this software without specific prior written permission.
+  20:/usr/lib/avr/include/util/delay.h **** 
+  21:/usr/lib/avr/include/util/delay.h ****   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  22:/usr/lib/avr/include/util/delay.h ****   AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  23:/usr/lib/avr/include/util/delay.h ****   IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  24:/usr/lib/avr/include/util/delay.h ****   ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+  25:/usr/lib/avr/include/util/delay.h ****   LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  26:/usr/lib/avr/include/util/delay.h ****   CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  27:/usr/lib/avr/include/util/delay.h ****   SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  28:/usr/lib/avr/include/util/delay.h ****   INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  29:/usr/lib/avr/include/util/delay.h ****   CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  30:/usr/lib/avr/include/util/delay.h ****   ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+  31:/usr/lib/avr/include/util/delay.h ****   POSSIBILITY OF SUCH DAMAGE. */
+  32:/usr/lib/avr/include/util/delay.h **** 
+  33:/usr/lib/avr/include/util/delay.h **** /* $Id$ */
+  34:/usr/lib/avr/include/util/delay.h **** 
+  35:/usr/lib/avr/include/util/delay.h **** #ifndef _UTIL_DELAY_H_
+  36:/usr/lib/avr/include/util/delay.h **** #define _UTIL_DELAY_H_ 1
+  37:/usr/lib/avr/include/util/delay.h **** 
+  38:/usr/lib/avr/include/util/delay.h **** #ifndef __DOXYGEN__
+  39:/usr/lib/avr/include/util/delay.h **** #  ifndef __HAS_DELAY_CYCLES
+  40:/usr/lib/avr/include/util/delay.h **** #    define __HAS_DELAY_CYCLES 1
+  41:/usr/lib/avr/include/util/delay.h **** #  endif
+  42:/usr/lib/avr/include/util/delay.h **** #endif  /* __DOXYGEN__ */
+  43:/usr/lib/avr/include/util/delay.h **** 
+  44:/usr/lib/avr/include/util/delay.h **** #include <inttypes.h>
+  45:/usr/lib/avr/include/util/delay.h **** #include <util/delay_basic.h>
+  46:/usr/lib/avr/include/util/delay.h **** #include <math.h>
+  47:/usr/lib/avr/include/util/delay.h **** 
+  48:/usr/lib/avr/include/util/delay.h **** /** \file */
+  49:/usr/lib/avr/include/util/delay.h **** /** \defgroup util_delay <util/delay.h>: Convenience functions for busy-wait delay loops
+  50:/usr/lib/avr/include/util/delay.h ****     \code
+  51:/usr/lib/avr/include/util/delay.h ****     #define F_CPU 1000000UL  // 1 MHz
+  52:/usr/lib/avr/include/util/delay.h ****     //#define F_CPU 14.7456E6
+  53:/usr/lib/avr/include/util/delay.h ****     #include <util/delay.h>
+  54:/usr/lib/avr/include/util/delay.h ****     \endcode
+  55:/usr/lib/avr/include/util/delay.h **** 
+  56:/usr/lib/avr/include/util/delay.h ****     \note As an alternative method, it is possible to pass the
+  57:/usr/lib/avr/include/util/delay.h ****     F_CPU macro down to the compiler from the Makefile.
+  58:/usr/lib/avr/include/util/delay.h ****     Obviously, in that case, no \c \#define statement should be
+  59:/usr/lib/avr/include/util/delay.h ****     used.
+  60:/usr/lib/avr/include/util/delay.h **** 
+  61:/usr/lib/avr/include/util/delay.h ****     The functions in this header file are wrappers around the basic
+  62:/usr/lib/avr/include/util/delay.h ****     busy-wait functions from <util/delay_basic.h>.  They are meant as
+  63:/usr/lib/avr/include/util/delay.h ****     convenience functions where actual time values can be specified
+  64:/usr/lib/avr/include/util/delay.h ****     rather than a number of cycles to wait for.  The idea behind is
+  65:/usr/lib/avr/include/util/delay.h ****     that compile-time constant expressions will be eliminated by
+  66:/usr/lib/avr/include/util/delay.h ****     compiler optimization so floating-point expressions can be used
+  67:/usr/lib/avr/include/util/delay.h ****     to calculate the number of delay cycles needed based on the CPU
+  68:/usr/lib/avr/include/util/delay.h ****     frequency passed by the macro F_CPU.
+  69:/usr/lib/avr/include/util/delay.h **** 
+  70:/usr/lib/avr/include/util/delay.h ****     \note In order for these functions to work as intended, compiler
+  71:/usr/lib/avr/include/util/delay.h ****     optimizations <em>must</em> be enabled, and the delay time
+  72:/usr/lib/avr/include/util/delay.h ****     <em>must</em> be an expression that is a known constant at
+  73:/usr/lib/avr/include/util/delay.h ****     compile-time.  If these requirements are not met, the resulting
+  74:/usr/lib/avr/include/util/delay.h ****     delay will be much longer (and basically unpredictable), and
+  75:/usr/lib/avr/include/util/delay.h ****     applications that otherwise do not use floating-point calculations
+  76:/usr/lib/avr/include/util/delay.h ****     will experience severe code bloat by the floating-point library
+  77:/usr/lib/avr/include/util/delay.h ****     routines linked into the application.
+  78:/usr/lib/avr/include/util/delay.h **** 
+  79:/usr/lib/avr/include/util/delay.h ****     The functions available allow the specification of microsecond, and
+  80:/usr/lib/avr/include/util/delay.h ****     millisecond delays directly, using the application-supplied macro
+  81:/usr/lib/avr/include/util/delay.h ****     F_CPU as the CPU clock frequency (in Hertz).
+  82:/usr/lib/avr/include/util/delay.h **** 
+  83:/usr/lib/avr/include/util/delay.h **** */
+  84:/usr/lib/avr/include/util/delay.h **** 
+  85:/usr/lib/avr/include/util/delay.h **** #if !defined(__DOXYGEN__)
+  86:/usr/lib/avr/include/util/delay.h **** static __inline__ void _delay_us(double __us) __attribute__((__always_inline__));
+  87:/usr/lib/avr/include/util/delay.h **** static __inline__ void _delay_ms(double __ms) __attribute__((__always_inline__));
+  88:/usr/lib/avr/include/util/delay.h **** #endif
+  89:/usr/lib/avr/include/util/delay.h **** 
+  90:/usr/lib/avr/include/util/delay.h **** #ifndef F_CPU
+  91:/usr/lib/avr/include/util/delay.h **** /* prevent compiler error by supplying a default */
+  92:/usr/lib/avr/include/util/delay.h **** # warning "F_CPU not defined for <util/delay.h>"
+  93:/usr/lib/avr/include/util/delay.h **** /** \ingroup util_delay
+  94:/usr/lib/avr/include/util/delay.h ****     \def F_CPU
+  95:/usr/lib/avr/include/util/delay.h ****     \brief CPU frequency in Hz
+  96:/usr/lib/avr/include/util/delay.h **** 
+  97:/usr/lib/avr/include/util/delay.h ****     The macro F_CPU specifies the CPU frequency to be considered by
+  98:/usr/lib/avr/include/util/delay.h ****     the delay macros.  This macro is normally supplied by the
+  99:/usr/lib/avr/include/util/delay.h ****     environment (e.g. from within a project header, or the project's
+ 100:/usr/lib/avr/include/util/delay.h ****     Makefile).  The value 1 MHz here is only provided as a "vanilla"
+ 101:/usr/lib/avr/include/util/delay.h ****     fallback if no such user-provided definition could be found.
+ 102:/usr/lib/avr/include/util/delay.h **** 
+ 103:/usr/lib/avr/include/util/delay.h ****     In terms of the delay functions, the CPU frequency can be given as
+ 104:/usr/lib/avr/include/util/delay.h ****     a floating-point constant (e.g. 3.6864E6 for 3.6864 MHz).
+ 105:/usr/lib/avr/include/util/delay.h ****     However, the macros in <util/setbaud.h> require it to be an
+ 106:/usr/lib/avr/include/util/delay.h ****     integer value.
+ 107:/usr/lib/avr/include/util/delay.h ****  */
+ 108:/usr/lib/avr/include/util/delay.h **** # define F_CPU 1000000UL
+ 109:/usr/lib/avr/include/util/delay.h **** #endif
+ 110:/usr/lib/avr/include/util/delay.h **** 
+ 111:/usr/lib/avr/include/util/delay.h **** #ifndef __OPTIMIZE__
+ 112:/usr/lib/avr/include/util/delay.h **** # warning "Compiler optimizations disabled; functions from <util/delay.h> won't work as designed"
+ 113:/usr/lib/avr/include/util/delay.h **** #endif
+ 114:/usr/lib/avr/include/util/delay.h **** 
+ 115:/usr/lib/avr/include/util/delay.h **** #if __HAS_DELAY_CYCLES && defined(__OPTIMIZE__) && \
+ 116:/usr/lib/avr/include/util/delay.h ****   !defined(__DELAY_BACKWARD_COMPATIBLE__) &&	   \
+ 117:/usr/lib/avr/include/util/delay.h ****   __STDC_HOSTED__
+ 118:/usr/lib/avr/include/util/delay.h **** #  include <math.h>
+ 119:/usr/lib/avr/include/util/delay.h **** #endif
+ 120:/usr/lib/avr/include/util/delay.h **** 
+ 121:/usr/lib/avr/include/util/delay.h **** /**
+ 122:/usr/lib/avr/include/util/delay.h ****    \ingroup util_delay
+ 123:/usr/lib/avr/include/util/delay.h **** 
+ 124:/usr/lib/avr/include/util/delay.h ****    Perform a delay of \c __ms milliseconds, using _delay_loop_2().
+ 125:/usr/lib/avr/include/util/delay.h **** 
+ 126:/usr/lib/avr/include/util/delay.h ****    The macro F_CPU is supposed to be defined to a
+ 127:/usr/lib/avr/include/util/delay.h ****    constant defining the CPU clock frequency (in Hertz).
+ 128:/usr/lib/avr/include/util/delay.h **** 
+ 129:/usr/lib/avr/include/util/delay.h ****    The maximal possible delay is 262.14 ms / F_CPU in MHz.
+ 130:/usr/lib/avr/include/util/delay.h **** 
+ 131:/usr/lib/avr/include/util/delay.h ****    When the user request delay which exceed the maximum possible one,
+ 132:/usr/lib/avr/include/util/delay.h ****    _delay_ms() provides a decreased resolution functionality. In this
+ 133:/usr/lib/avr/include/util/delay.h ****    mode _delay_ms() will work with a resolution of 1/10 ms, providing
+ 134:/usr/lib/avr/include/util/delay.h ****    delays up to 6.5535 seconds (independent from CPU frequency).  The
+ 135:/usr/lib/avr/include/util/delay.h ****    user will not be informed about decreased resolution.
+ 136:/usr/lib/avr/include/util/delay.h **** 
+ 137:/usr/lib/avr/include/util/delay.h ****    If the avr-gcc toolchain has __builtin_avr_delay_cycles()
+ 138:/usr/lib/avr/include/util/delay.h ****    support, maximal possible delay is 4294967.295 ms/ F_CPU in MHz. For
+ 139:/usr/lib/avr/include/util/delay.h ****    values greater than the maximal possible delay, overflows results in
+ 140:/usr/lib/avr/include/util/delay.h ****    no delay i.e., 0ms.
+ 141:/usr/lib/avr/include/util/delay.h **** 
+ 142:/usr/lib/avr/include/util/delay.h ****    Conversion of \c __ms into clock cycles may not always result in
+ 143:/usr/lib/avr/include/util/delay.h ****    integer.  By default, the clock cycles rounded up to next
+ 144:/usr/lib/avr/include/util/delay.h ****    integer. This ensures that the user gets at least \c __ms
+ 145:/usr/lib/avr/include/util/delay.h ****    microseconds of delay.
+ 146:/usr/lib/avr/include/util/delay.h **** 
+ 147:/usr/lib/avr/include/util/delay.h ****    Alternatively, by defining the macro \c __DELAY_ROUND_DOWN__, or
+ 148:/usr/lib/avr/include/util/delay.h ****    \c __DELAY_ROUND_CLOSEST__, before including this header file, the
+ 149:/usr/lib/avr/include/util/delay.h ****    algorithm can be made to round down, or round to closest integer,
+ 150:/usr/lib/avr/include/util/delay.h ****    respectively.
+ 151:/usr/lib/avr/include/util/delay.h **** 
+ 152:/usr/lib/avr/include/util/delay.h ****    \note
+ 153:/usr/lib/avr/include/util/delay.h **** 
+ 154:/usr/lib/avr/include/util/delay.h ****    The implementation of _delay_ms() based on
+ 155:/usr/lib/avr/include/util/delay.h ****    __builtin_avr_delay_cycles() is not backward compatible with older
+ 156:/usr/lib/avr/include/util/delay.h ****    implementations.  In order to get functionality backward compatible
+ 157:/usr/lib/avr/include/util/delay.h ****    with previous versions, the macro \c "__DELAY_BACKWARD_COMPATIBLE__"
+ 158:/usr/lib/avr/include/util/delay.h ****    must be defined before including this header file. Also, the
+ 159:/usr/lib/avr/include/util/delay.h ****    backward compatible algorithm will be chosen if the code is
+ 160:/usr/lib/avr/include/util/delay.h ****    compiled in a <em>freestanding environment</em> (GCC option
+ 161:/usr/lib/avr/include/util/delay.h ****    \c -ffreestanding), as the math functions required for rounding are
+ 162:/usr/lib/avr/include/util/delay.h ****    not available to the compiler then.
+ 163:/usr/lib/avr/include/util/delay.h **** 
+ 164:/usr/lib/avr/include/util/delay.h ****  */
+ 165:/usr/lib/avr/include/util/delay.h **** void
+ 166:/usr/lib/avr/include/util/delay.h **** _delay_ms(double __ms)
+ 167:/usr/lib/avr/include/util/delay.h **** {
+ 168:/usr/lib/avr/include/util/delay.h **** 	double __tmp ;
+ 169:/usr/lib/avr/include/util/delay.h **** #if __HAS_DELAY_CYCLES && defined(__OPTIMIZE__) && \
+ 170:/usr/lib/avr/include/util/delay.h ****   !defined(__DELAY_BACKWARD_COMPATIBLE__) &&	   \
+ 171:/usr/lib/avr/include/util/delay.h ****   __STDC_HOSTED__
+ 172:/usr/lib/avr/include/util/delay.h **** 	uint32_t __ticks_dc;
+ 173:/usr/lib/avr/include/util/delay.h **** 	extern void __builtin_avr_delay_cycles(unsigned long);
+ 174:/usr/lib/avr/include/util/delay.h **** 	__tmp = ((F_CPU) / 1e3) * __ms;
+ 175:/usr/lib/avr/include/util/delay.h **** 
+ 176:/usr/lib/avr/include/util/delay.h **** 	#if defined(__DELAY_ROUND_DOWN__)
+ 177:/usr/lib/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)fabs(__tmp);
+ 178:/usr/lib/avr/include/util/delay.h **** 
+ 179:/usr/lib/avr/include/util/delay.h **** 	#elif defined(__DELAY_ROUND_CLOSEST__)
+ 180:/usr/lib/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)(fabs(__tmp)+0.5);
+ 181:/usr/lib/avr/include/util/delay.h **** 
+ 182:/usr/lib/avr/include/util/delay.h **** 	#else
+ 183:/usr/lib/avr/include/util/delay.h **** 		//round up by default
+ 184:/usr/lib/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)(ceil(fabs(__tmp)));
+ 185:/usr/lib/avr/include/util/delay.h **** 	#endif
+ 186:/usr/lib/avr/include/util/delay.h **** 
+ 187:/usr/lib/avr/include/util/delay.h **** 	__builtin_avr_delay_cycles(__ticks_dc);
+ 188:/usr/lib/avr/include/util/delay.h **** 
+ 189:/usr/lib/avr/include/util/delay.h **** #else
+ 190:/usr/lib/avr/include/util/delay.h **** 	uint16_t __ticks;
+ 191:/usr/lib/avr/include/util/delay.h **** 	__tmp = ((F_CPU) / 4e3) * __ms;
+ 192:/usr/lib/avr/include/util/delay.h **** 	if (__tmp < 1.0)
+ 193:/usr/lib/avr/include/util/delay.h **** 		__ticks = 1;
+ 194:/usr/lib/avr/include/util/delay.h **** 	else if (__tmp > 65535)
+ 195:/usr/lib/avr/include/util/delay.h **** 	{
+ 196:/usr/lib/avr/include/util/delay.h **** 		//	__ticks = requested delay in 1/10 ms
+ 197:/usr/lib/avr/include/util/delay.h **** 		__ticks = (uint16_t) (__ms * 10.0);
+ 198:/usr/lib/avr/include/util/delay.h **** 		while(__ticks)
+ 199:/usr/lib/avr/include/util/delay.h **** 		{
+ 200:/usr/lib/avr/include/util/delay.h **** 			// wait 1/10 ms
+ 201:/usr/lib/avr/include/util/delay.h **** 			_delay_loop_2(((F_CPU) / 4e3) / 10);
+ 202:/usr/lib/avr/include/util/delay.h **** 			__ticks --;
+ 203:/usr/lib/avr/include/util/delay.h **** 		}
+ 204:/usr/lib/avr/include/util/delay.h **** 		return;
+ 205:/usr/lib/avr/include/util/delay.h **** 	}
+ 206:/usr/lib/avr/include/util/delay.h **** 	else
+ 207:/usr/lib/avr/include/util/delay.h **** 		__ticks = (uint16_t)__tmp;
+ 208:/usr/lib/avr/include/util/delay.h **** 	_delay_loop_2(__ticks);
+ 209:/usr/lib/avr/include/util/delay.h **** #endif
+ 210:/usr/lib/avr/include/util/delay.h **** }
+ 211:/usr/lib/avr/include/util/delay.h **** 
+ 212:/usr/lib/avr/include/util/delay.h **** /**
+ 213:/usr/lib/avr/include/util/delay.h ****    \ingroup util_delay
+ 214:/usr/lib/avr/include/util/delay.h **** 
+ 215:/usr/lib/avr/include/util/delay.h ****    Perform a delay of \c __us microseconds, using _delay_loop_1().
+ 216:/usr/lib/avr/include/util/delay.h **** 
+ 217:/usr/lib/avr/include/util/delay.h ****    The macro F_CPU is supposed to be defined to a
+ 218:/usr/lib/avr/include/util/delay.h ****    constant defining the CPU clock frequency (in Hertz).
+ 219:/usr/lib/avr/include/util/delay.h **** 
+ 220:/usr/lib/avr/include/util/delay.h ****    The maximal possible delay is 768 us / F_CPU in MHz.
+ 221:/usr/lib/avr/include/util/delay.h **** 
+ 222:/usr/lib/avr/include/util/delay.h ****    If the user requests a delay greater than the maximal possible one,
+ 223:/usr/lib/avr/include/util/delay.h ****    _delay_us() will automatically call _delay_ms() instead.  The user
+ 224:/usr/lib/avr/include/util/delay.h ****    will not be informed about this case.
+ 225:/usr/lib/avr/include/util/delay.h **** 
+ 226:/usr/lib/avr/include/util/delay.h ****    If the avr-gcc toolchain has __builtin_avr_delay_cycles()
+ 227:/usr/lib/avr/include/util/delay.h ****    support, maximal possible delay is 4294967.295 us/ F_CPU in MHz. For
+ 228:/usr/lib/avr/include/util/delay.h ****    values greater than the maximal possible delay, overflow results in
+ 229:/usr/lib/avr/include/util/delay.h ****    no delay i.e., 0us.
+ 230:/usr/lib/avr/include/util/delay.h **** 
+ 231:/usr/lib/avr/include/util/delay.h ****    Conversion of \c __us into clock cycles may not always result in
+ 232:/usr/lib/avr/include/util/delay.h ****    integer.  By default, the clock cycles rounded up to next
+ 233:/usr/lib/avr/include/util/delay.h ****    integer. This ensures that the user gets at least \c __us
+ 234:/usr/lib/avr/include/util/delay.h ****    microseconds of delay.
+ 235:/usr/lib/avr/include/util/delay.h **** 
+ 236:/usr/lib/avr/include/util/delay.h ****    Alternatively, by defining the macro \c __DELAY_ROUND_DOWN__, or
+ 237:/usr/lib/avr/include/util/delay.h ****    \c __DELAY_ROUND_CLOSEST__, before including this header file, the
+ 238:/usr/lib/avr/include/util/delay.h ****    algorithm can be made to round down, or round to closest integer,
+ 239:/usr/lib/avr/include/util/delay.h ****    respectively.
+ 240:/usr/lib/avr/include/util/delay.h **** 
+ 241:/usr/lib/avr/include/util/delay.h ****    \note
+ 242:/usr/lib/avr/include/util/delay.h **** 
+ 243:/usr/lib/avr/include/util/delay.h ****    The implementation of _delay_ms() based on
+ 244:/usr/lib/avr/include/util/delay.h ****    __builtin_avr_delay_cycles() is not backward compatible with older
+ 245:/usr/lib/avr/include/util/delay.h ****    implementations.  In order to get functionality backward compatible
+ 246:/usr/lib/avr/include/util/delay.h ****    with previous versions, the macro \c __DELAY_BACKWARD_COMPATIBLE__
+ 247:/usr/lib/avr/include/util/delay.h ****    must be defined before including this header file. Also, the
+ 248:/usr/lib/avr/include/util/delay.h ****    backward compatible algorithm will be chosen if the code is
+ 249:/usr/lib/avr/include/util/delay.h ****    compiled in a <em>freestanding environment</em> (GCC option
+ 250:/usr/lib/avr/include/util/delay.h ****    \c -ffreestanding), as the math functions required for rounding are
+ 251:/usr/lib/avr/include/util/delay.h ****    not available to the compiler then.
+ 252:/usr/lib/avr/include/util/delay.h **** 
+ 253:/usr/lib/avr/include/util/delay.h ****  */
+ 254:/usr/lib/avr/include/util/delay.h **** void
+ 255:/usr/lib/avr/include/util/delay.h **** _delay_us(double __us)
+ 256:/usr/lib/avr/include/util/delay.h **** {
+ 257:/usr/lib/avr/include/util/delay.h **** 	double __tmp ;
+ 258:/usr/lib/avr/include/util/delay.h **** #if __HAS_DELAY_CYCLES && defined(__OPTIMIZE__) && \
+ 259:/usr/lib/avr/include/util/delay.h ****   !defined(__DELAY_BACKWARD_COMPATIBLE__) &&	   \
+ 260:/usr/lib/avr/include/util/delay.h ****   __STDC_HOSTED__
+ 261:/usr/lib/avr/include/util/delay.h **** 	uint32_t __ticks_dc;
+ 262:/usr/lib/avr/include/util/delay.h **** 	extern void __builtin_avr_delay_cycles(unsigned long);
+ 263:/usr/lib/avr/include/util/delay.h **** 	__tmp = ((F_CPU) / 1e6) * __us;
+ 264:/usr/lib/avr/include/util/delay.h **** 
+ 265:/usr/lib/avr/include/util/delay.h **** 	#if defined(__DELAY_ROUND_DOWN__)
+ 266:/usr/lib/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)fabs(__tmp);
+ 267:/usr/lib/avr/include/util/delay.h **** 
+ 268:/usr/lib/avr/include/util/delay.h **** 	#elif defined(__DELAY_ROUND_CLOSEST__)
+ 269:/usr/lib/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)(fabs(__tmp)+0.5);
+ 270:/usr/lib/avr/include/util/delay.h **** 
+ 271:/usr/lib/avr/include/util/delay.h **** 	#else
+ 272:/usr/lib/avr/include/util/delay.h **** 		//round up by default
+ 273:/usr/lib/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)(ceil(fabs(__tmp)));
+ 274:/usr/lib/avr/include/util/delay.h **** 	#endif
+ 275:/usr/lib/avr/include/util/delay.h **** 
+ 276:/usr/lib/avr/include/util/delay.h **** 	__builtin_avr_delay_cycles(__ticks_dc);
+  51               		.loc 2 276 0
+  52 0010 8AE0      		ldi r24,lo8(10)
+  53 0012 8A95      	1:	dec r24
+  54 0014 01F4      		brne 1b
+  55 0016 00C0      		rjmp .
+  56               	.LVL1:
+  57 0018 0895      		ret
+  58               	.LBE25:
+  59               	.LBE24:
+  60               		.cfi_endproc
+  61               	.LFE7:
+  63               	.global	ds1302_stop
+  65               	ds1302_stop:
+  66               	.LFB8:
+  45:alarm.c       **** void ds1302_stop(void)  { DS1302_PORT &= ~(1 << DS1302_CE); _delay_us(4); }
+  67               		.loc 1 45 0
+  68               		.cfi_startproc
+  69               	/* prologue: function */
+  70               	/* frame size = 0 */
+  71               	/* stack size = 0 */
+  72               	.L__stack_usage = 0
+  73               		.loc 1 45 0
+  74 001a 5E98      		cbi 0xb,6
+  75               	.LVL2:
+  76               	.LBB26:
+  77               	.LBB27:
+  78               		.loc 2 276 0
+  79 001c 8AE0      		ldi r24,lo8(10)
+  80 001e 8A95      	1:	dec r24
+  81 0020 01F4      		brne 1b
+  82 0022 00C0      		rjmp .
+  83               	.LVL3:
+  84 0024 0895      		ret
+  85               	.LBE27:
+  86               	.LBE26:
+  87               		.cfi_endproc
+  88               	.LFE8:
+  90               	.global	ds1302_write_byte
+  92               	ds1302_write_byte:
+  93               	.LFB9:
+  46:alarm.c       **** 
+  47:alarm.c       **** void ds1302_write_byte(uint8_t data) {
+  94               		.loc 1 47 0
+  95               		.cfi_startproc
+  96               	.LVL4:
+  97               	/* prologue: function */
+  98               	/* frame size = 0 */
+  99               	/* stack size = 0 */
+ 100               	.L__stack_usage = 0
+ 101               		.loc 1 47 0
+ 102 0026 98E0      		ldi r25,lo8(8)
+ 103               	.LVL5:
+ 104               	.L7:
+ 105               	.LBB28:
+  48:alarm.c       ****     for (uint8_t i=0;i<8;i++) {
+  49:alarm.c       ****         if(data & 0x01) DS1302_PORT |= (1<<DS1302_IO);
+ 106               		.loc 1 49 0
+ 107 0028 80FF      		sbrs r24,0
+ 108 002a 00C0      		rjmp .L5
+ 109               		.loc 1 49 0 is_stmt 0 discriminator 1
+ 110 002c 5B9A      		sbi 0xb,3
+ 111 002e 00C0      		rjmp .L6
+ 112               	.L5:
+  50:alarm.c       ****         else DS1302_PORT &= ~(1<<DS1302_IO);
+ 113               		.loc 1 50 0 is_stmt 1
+ 114 0030 5B98      		cbi 0xb,3
+ 115               	.L6:
+  51:alarm.c       ****         DS1302_PORT |= (1<<DS1302_CLK);
+ 116               		.loc 1 51 0 discriminator 2
+ 117 0032 5A9A      		sbi 0xb,2
+ 118               	.LVL6:
+ 119               	.LBB29:
+ 120               	.LBB30:
+ 121               		.loc 2 276 0 discriminator 2
+ 122 0034 22E0      		ldi r18,lo8(2)
+ 123 0036 2A95      	1:	dec r18
+ 124 0038 01F4      		brne 1b
+ 125 003a 00C0      		rjmp .
+ 126               	.LVL7:
+ 127               	.LBE30:
+ 128               	.LBE29:
+  52:alarm.c       ****         _delay_us(1);
+  53:alarm.c       ****         DS1302_PORT &= ~(1<<DS1302_CLK);
+ 129               		.loc 1 53 0 discriminator 2
+ 130 003c 5A98      		cbi 0xb,2
+ 131               	.LVL8:
+ 132               	.LBB31:
+ 133               	.LBB32:
+ 134               		.loc 2 276 0 discriminator 2
+ 135 003e 22E0      		ldi r18,lo8(2)
+ 136 0040 2A95      	1:	dec r18
+ 137 0042 01F4      		brne 1b
+ 138 0044 00C0      		rjmp .
+ 139               	.LVL9:
+ 140               	.LBE32:
+ 141               	.LBE31:
+  54:alarm.c       ****         _delay_us(1);
+  55:alarm.c       ****         data >>=1;
+ 142               		.loc 1 55 0 discriminator 2
+ 143 0046 8695      		lsr r24
+ 144               	.LVL10:
+ 145 0048 9150      		subi r25,lo8(-(-1))
+ 146               	.LVL11:
+  48:alarm.c       ****         if(data & 0x01) DS1302_PORT |= (1<<DS1302_IO);
+ 147               		.loc 1 48 0 discriminator 2
+ 148 004a 01F4      		brne .L7
+ 149               	/* epilogue start */
+ 150               	.LBE28:
+  56:alarm.c       ****     }
+  57:alarm.c       **** }
+ 151               		.loc 1 57 0
+ 152 004c 0895      		ret
+ 153               		.cfi_endproc
+ 154               	.LFE9:
+ 156               	.global	ds1302_read_byte
+ 158               	ds1302_read_byte:
+ 159               	.LFB10:
+  58:alarm.c       **** 
+  59:alarm.c       **** uint8_t ds1302_read_byte(void) {
+ 160               		.loc 1 59 0
+ 161               		.cfi_startproc
+ 162               	/* prologue: function */
+ 163               	/* frame size = 0 */
+ 164               	/* stack size = 0 */
+ 165               	.L__stack_usage = 0
+ 166               	.LVL12:
+  60:alarm.c       ****     uint8_t data=0;
+  61:alarm.c       ****     DS1302_DDR &= ~(1<<DS1302_IO);
+ 167               		.loc 1 61 0
+ 168 004e 5398      		cbi 0xa,3
+ 169               	.LVL13:
+ 170 0050 98E0      		ldi r25,lo8(8)
+  60:alarm.c       ****     uint8_t data=0;
+ 171               		.loc 1 60 0
+ 172 0052 80E0      		ldi r24,0
+ 173               	.LVL14:
+ 174               	.L12:
+ 175               	.LBB33:
+  62:alarm.c       ****     for(uint8_t i=0;i<8;i++){
+  63:alarm.c       ****         data >>=1;
+ 176               		.loc 1 63 0
+ 177 0054 8695      		lsr r24
+ 178               	.LVL15:
+  64:alarm.c       ****         if(DS1302_PIN & (1<<DS1302_IO)) data|=0x80;
+ 179               		.loc 1 64 0
+ 180 0056 4B99      		sbic 0x9,3
+ 181               		.loc 1 64 0 is_stmt 0 discriminator 1
+ 182 0058 8068      		ori r24,lo8(-128)
+ 183               	.LVL16:
+ 184               	.L11:
+  65:alarm.c       ****         DS1302_PORT |= (1<<DS1302_CLK);
+ 185               		.loc 1 65 0 is_stmt 1 discriminator 2
+ 186 005a 5A9A      		sbi 0xb,2
+ 187               	.LVL17:
+ 188               	.LBB34:
+ 189               	.LBB35:
+ 190               		.loc 2 276 0 discriminator 2
+ 191 005c 22E0      		ldi r18,lo8(2)
+ 192 005e 2A95      	1:	dec r18
+ 193 0060 01F4      		brne 1b
+ 194 0062 00C0      		rjmp .
+ 195               	.LVL18:
+ 196               	.LBE35:
+ 197               	.LBE34:
+  66:alarm.c       ****         _delay_us(1);
+  67:alarm.c       ****         DS1302_PORT &= ~(1<<DS1302_CLK);
+ 198               		.loc 1 67 0 discriminator 2
+ 199 0064 5A98      		cbi 0xb,2
+ 200               	.LVL19:
+ 201               	.LBB36:
+ 202               	.LBB37:
+ 203               		.loc 2 276 0 discriminator 2
+ 204 0066 22E0      		ldi r18,lo8(2)
+ 205 0068 2A95      	1:	dec r18
+ 206 006a 01F4      		brne 1b
+ 207 006c 00C0      		rjmp .
+ 208               	.LVL20:
+ 209 006e 9150      		subi r25,lo8(-(-1))
+ 210               	.LVL21:
+ 211               	.LBE37:
+ 212               	.LBE36:
+  62:alarm.c       ****         data >>=1;
+ 213               		.loc 1 62 0 discriminator 2
+ 214 0070 01F4      		brne .L12
+ 215               	.LBE33:
+  68:alarm.c       ****         _delay_us(1);
+  69:alarm.c       ****     }
+  70:alarm.c       ****     DS1302_DDR |= (1<<DS1302_IO);
+ 216               		.loc 1 70 0
+ 217 0072 539A      		sbi 0xa,3
+  71:alarm.c       ****     return data;
+  72:alarm.c       **** }
+ 218               		.loc 1 72 0
+ 219 0074 0895      		ret
+ 220               		.cfi_endproc
+ 221               	.LFE10:
+ 223               	.global	bcd_to_dec
+ 225               	bcd_to_dec:
+ 226               	.LFB11:
+  73:alarm.c       **** 
+  74:alarm.c       **** uint8_t bcd_to_dec(uint8_t bcd){ return ((bcd>>4)*10)+(bcd&0x0F); }
+ 227               		.loc 1 74 0
+ 228               		.cfi_startproc
+ 229               	.LVL22:
+ 230               	/* prologue: function */
+ 231               	/* frame size = 0 */
+ 232               	/* stack size = 0 */
+ 233               	.L__stack_usage = 0
+ 234               		.loc 1 74 0
+ 235 0076 982F      		mov r25,r24
+ 236 0078 9295      		swap r25
+ 237 007a 9F70      		andi r25,lo8(15)
+ 238 007c 8F70      		andi r24,lo8(15)
+ 239               	.LVL23:
+ 240 007e 2AE0      		ldi r18,lo8(10)
+ 241 0080 929F      		mul r25,r18
+ 242 0082 800D      		add r24,r0
+ 243 0084 1124      		clr __zero_reg__
+ 244 0086 0895      		ret
+ 245               		.cfi_endproc
+ 246               	.LFE11:
+ 248               	.global	dec_to_bcd
+ 250               	dec_to_bcd:
+ 251               	.LFB12:
+  75:alarm.c       **** uint8_t dec_to_bcd(uint8_t dec){ return ((dec/10)<<4)|(dec%10); }
+ 252               		.loc 1 75 0
+ 253               		.cfi_startproc
+ 254               	.LVL24:
+ 255               	/* prologue: function */
+ 256               	/* frame size = 0 */
+ 257               	/* stack size = 0 */
+ 258               	.L__stack_usage = 0
+ 259               		.loc 1 75 0
+ 260 0088 6AE0      		ldi r22,lo8(10)
+ 261 008a 0E94 0000 		call __udivmodqi4
+ 262               	.LVL25:
+ 263 008e 292F      		mov r18,r25
+ 264 0090 30E1      		ldi r19,lo8(16)
+ 265 0092 839F      		mul r24,r19
+ 266 0094 C001      		movw r24,r0
+ 267 0096 1124      		clr __zero_reg__
+ 268 0098 822B      		or r24,r18
+ 269 009a 0895      		ret
+ 270               		.cfi_endproc
+ 271               	.LFE12:
+ 273               	.global	ds1302_write
+ 275               	ds1302_write:
+ 276               	.LFB13:
+  76:alarm.c       **** 
+  77:alarm.c       **** void ds1302_write(uint8_t addr,uint8_t data){
+ 277               		.loc 1 77 0
+ 278               		.cfi_startproc
+ 279               	.LVL26:
+ 280 009c CF93      		push r28
+ 281               	.LCFI0:
+ 282               		.cfi_def_cfa_offset 3
+ 283               		.cfi_offset 28, -2
+ 284 009e DF93      		push r29
+ 285               	.LCFI1:
+ 286               		.cfi_def_cfa_offset 4
+ 287               		.cfi_offset 29, -3
+ 288               	/* prologue: function */
+ 289               	/* frame size = 0 */
+ 290               	/* stack size = 2 */
+ 291               	.L__stack_usage = 2
+ 292 00a0 D82F      		mov r29,r24
+ 293 00a2 C62F      		mov r28,r22
+  78:alarm.c       ****     ds1302_start();
+ 294               		.loc 1 78 0
+ 295 00a4 0E94 0000 		call ds1302_start
+ 296               	.LVL27:
+  79:alarm.c       ****     ds1302_write_byte(addr);
+ 297               		.loc 1 79 0
+ 298 00a8 8D2F      		mov r24,r29
+ 299 00aa 0E94 0000 		call ds1302_write_byte
+ 300               	.LVL28:
+  80:alarm.c       ****     ds1302_write_byte(data);
+ 301               		.loc 1 80 0
+ 302 00ae 8C2F      		mov r24,r28
+ 303 00b0 0E94 0000 		call ds1302_write_byte
+ 304               	.LVL29:
+ 305               	/* epilogue start */
+  81:alarm.c       ****     ds1302_stop();
+  82:alarm.c       **** }
+ 306               		.loc 1 82 0
+ 307 00b4 DF91      		pop r29
+ 308               	.LVL30:
+ 309 00b6 CF91      		pop r28
+ 310               	.LVL31:
+  81:alarm.c       ****     ds1302_stop();
+ 311               		.loc 1 81 0
+ 312 00b8 0C94 0000 		jmp ds1302_stop
+ 313               	.LVL32:
+ 314               		.cfi_endproc
+ 315               	.LFE13:
+ 317               	.global	ds1302_read
+ 319               	ds1302_read:
+ 320               	.LFB14:
+  83:alarm.c       **** 
+  84:alarm.c       **** uint8_t ds1302_read(uint8_t addr){
+ 321               		.loc 1 84 0
+ 322               		.cfi_startproc
+ 323               	.LVL33:
+ 324 00bc CF93      		push r28
+ 325               	.LCFI2:
+ 326               		.cfi_def_cfa_offset 3
+ 327               		.cfi_offset 28, -2
+ 328               	/* prologue: function */
+ 329               	/* frame size = 0 */
+ 330               	/* stack size = 1 */
+ 331               	.L__stack_usage = 1
+ 332 00be C82F      		mov r28,r24
+  85:alarm.c       ****     uint8_t data;
+  86:alarm.c       ****     ds1302_start();
+ 333               		.loc 1 86 0
+ 334 00c0 0E94 0000 		call ds1302_start
+ 335               	.LVL34:
+  87:alarm.c       ****     ds1302_write_byte(addr|0x01);
+ 336               		.loc 1 87 0
+ 337 00c4 8C2F      		mov r24,r28
+ 338 00c6 8160      		ori r24,lo8(1)
+ 339 00c8 0E94 0000 		call ds1302_write_byte
+ 340               	.LVL35:
+  88:alarm.c       ****     data = ds1302_read_byte();
+ 341               		.loc 1 88 0
+ 342 00cc 0E94 0000 		call ds1302_read_byte
+ 343               	.LVL36:
+ 344 00d0 C82F      		mov r28,r24
+ 345               	.LVL37:
+  89:alarm.c       ****     ds1302_stop();
+ 346               		.loc 1 89 0
+ 347 00d2 0E94 0000 		call ds1302_stop
+ 348               	.LVL38:
+  90:alarm.c       ****     return data;
+  91:alarm.c       **** }
+ 349               		.loc 1 91 0
+ 350 00d6 8C2F      		mov r24,r28
+ 351               	/* epilogue start */
+ 352 00d8 CF91      		pop r28
+ 353               	.LVL39:
+ 354 00da 0895      		ret
+ 355               		.cfi_endproc
+ 356               	.LFE14:
+ 358               	.global	ds1302_set_time
+ 360               	ds1302_set_time:
+ 361               	.LFB15:
+  92:alarm.c       **** 
+  93:alarm.c       **** void ds1302_set_time(uint8_t h,uint8_t m,uint8_t s){
+ 362               		.loc 1 93 0
+ 363               		.cfi_startproc
+ 364               	.LVL40:
+ 365 00dc 1F93      		push r17
+ 366               	.LCFI3:
+ 367               		.cfi_def_cfa_offset 3
+ 368               		.cfi_offset 17, -2
+ 369 00de CF93      		push r28
+ 370               	.LCFI4:
+ 371               		.cfi_def_cfa_offset 4
+ 372               		.cfi_offset 28, -3
+ 373 00e0 DF93      		push r29
+ 374               	.LCFI5:
+ 375               		.cfi_def_cfa_offset 5
+ 376               		.cfi_offset 29, -4
+ 377               	/* prologue: function */
+ 378               	/* frame size = 0 */
+ 379               	/* stack size = 3 */
+ 380               	.L__stack_usage = 3
+ 381 00e2 C82F      		mov r28,r24
+ 382 00e4 D62F      		mov r29,r22
+ 383 00e6 142F      		mov r17,r20
+  94:alarm.c       ****     ds1302_write(0x8E,0x00);
+ 384               		.loc 1 94 0
+ 385 00e8 60E0      		ldi r22,0
+ 386               	.LVL41:
+ 387 00ea 8EE8      		ldi r24,lo8(-114)
+ 388               	.LVL42:
+ 389 00ec 0E94 0000 		call ds1302_write
+ 390               	.LVL43:
+  95:alarm.c       ****     ds1302_write(0x80,dec_to_bcd(s));
+ 391               		.loc 1 95 0
+ 392 00f0 812F      		mov r24,r17
+ 393 00f2 0E94 0000 		call dec_to_bcd
+ 394               	.LVL44:
+ 395 00f6 682F      		mov r22,r24
+ 396 00f8 80E8      		ldi r24,lo8(-128)
+ 397 00fa 0E94 0000 		call ds1302_write
+ 398               	.LVL45:
+  96:alarm.c       ****     ds1302_write(0x82,dec_to_bcd(m));
+ 399               		.loc 1 96 0
+ 400 00fe 8D2F      		mov r24,r29
+ 401 0100 0E94 0000 		call dec_to_bcd
+ 402               	.LVL46:
+ 403 0104 682F      		mov r22,r24
+ 404 0106 82E8      		ldi r24,lo8(-126)
+ 405 0108 0E94 0000 		call ds1302_write
+ 406               	.LVL47:
+  97:alarm.c       ****     ds1302_write(0x84,dec_to_bcd(h));
+ 407               		.loc 1 97 0
+ 408 010c 8C2F      		mov r24,r28
+ 409 010e 0E94 0000 		call dec_to_bcd
+ 410               	.LVL48:
+ 411 0112 682F      		mov r22,r24
+ 412 0114 84E8      		ldi r24,lo8(-124)
+ 413 0116 0E94 0000 		call ds1302_write
+ 414               	.LVL49:
+  98:alarm.c       ****     ds1302_write(0x8E,0x80);
+ 415               		.loc 1 98 0
+ 416 011a 60E8      		ldi r22,lo8(-128)
+ 417 011c 8EE8      		ldi r24,lo8(-114)
+ 418               	/* epilogue start */
+  99:alarm.c       **** }
+ 419               		.loc 1 99 0
+ 420 011e DF91      		pop r29
+ 421               	.LVL50:
+ 422 0120 CF91      		pop r28
+ 423               	.LVL51:
+ 424 0122 1F91      		pop r17
+ 425               	.LVL52:
+  98:alarm.c       ****     ds1302_write(0x8E,0x80);
+ 426               		.loc 1 98 0
+ 427 0124 0C94 0000 		jmp ds1302_write
+ 428               	.LVL53:
+ 429               		.cfi_endproc
+ 430               	.LFE15:
+ 432               	.global	ds1302_get_time
+ 434               	ds1302_get_time:
+ 435               	.LFB16:
+ 100:alarm.c       **** 
+ 101:alarm.c       **** void ds1302_get_time(uint8_t *h,uint8_t *m,uint8_t *s){
+ 436               		.loc 1 101 0
+ 437               		.cfi_startproc
+ 438               	.LVL54:
+ 439 0128 EF92      		push r14
+ 440               	.LCFI6:
+ 441               		.cfi_def_cfa_offset 3
+ 442               		.cfi_offset 14, -2
+ 443 012a FF92      		push r15
+ 444               	.LCFI7:
+ 445               		.cfi_def_cfa_offset 4
+ 446               		.cfi_offset 15, -3
+ 447 012c 0F93      		push r16
+ 448               	.LCFI8:
+ 449               		.cfi_def_cfa_offset 5
+ 450               		.cfi_offset 16, -4
+ 451 012e 1F93      		push r17
+ 452               	.LCFI9:
+ 453               		.cfi_def_cfa_offset 6
+ 454               		.cfi_offset 17, -5
+ 455 0130 CF93      		push r28
+ 456               	.LCFI10:
+ 457               		.cfi_def_cfa_offset 7
+ 458               		.cfi_offset 28, -6
+ 459 0132 DF93      		push r29
+ 460               	.LCFI11:
+ 461               		.cfi_def_cfa_offset 8
+ 462               		.cfi_offset 29, -7
+ 463               	/* prologue: function */
+ 464               	/* frame size = 0 */
+ 465               	/* stack size = 6 */
+ 466               	.L__stack_usage = 6
+ 467 0134 EC01      		movw r28,r24
+ 468 0136 8B01      		movw r16,r22
+ 469 0138 7A01      		movw r14,r20
+ 102:alarm.c       ****     *s = bcd_to_dec(ds1302_read(0x80));
+ 470               		.loc 1 102 0
+ 471 013a 80E8      		ldi r24,lo8(-128)
+ 472               	.LVL55:
+ 473 013c 0E94 0000 		call ds1302_read
+ 474               	.LVL56:
+ 475 0140 0E94 0000 		call bcd_to_dec
+ 476               	.LVL57:
+ 477 0144 F701      		movw r30,r14
+ 478 0146 8083      		st Z,r24
+ 103:alarm.c       ****     *m = bcd_to_dec(ds1302_read(0x82));
+ 479               		.loc 1 103 0
+ 480 0148 82E8      		ldi r24,lo8(-126)
+ 481 014a 0E94 0000 		call ds1302_read
+ 482               	.LVL58:
+ 483 014e 0E94 0000 		call bcd_to_dec
+ 484               	.LVL59:
+ 485 0152 F801      		movw r30,r16
+ 486 0154 8083      		st Z,r24
+ 104:alarm.c       ****     *h = bcd_to_dec(ds1302_read(0x84));
+ 487               		.loc 1 104 0
+ 488 0156 84E8      		ldi r24,lo8(-124)
+ 489 0158 0E94 0000 		call ds1302_read
+ 490               	.LVL60:
+ 491 015c 0E94 0000 		call bcd_to_dec
+ 492               	.LVL61:
+ 493 0160 8883      		st Y,r24
+ 494               	/* epilogue start */
+ 105:alarm.c       **** }
+ 495               		.loc 1 105 0
+ 496 0162 DF91      		pop r29
+ 497 0164 CF91      		pop r28
+ 498               	.LVL62:
+ 499 0166 1F91      		pop r17
+ 500 0168 0F91      		pop r16
+ 501               	.LVL63:
+ 502 016a FF90      		pop r15
+ 503 016c EF90      		pop r14
+ 504               	.LVL64:
+ 505 016e 0895      		ret
+ 506               		.cfi_endproc
+ 507               	.LFE16:
+ 509               	.global	button_pressed
+ 511               	button_pressed:
+ 512               	.LFB17:
+ 106:alarm.c       **** 
+ 107:alarm.c       **** // -------------------- BUTTON READ --------------------
+ 108:alarm.c       **** uint8_t button_pressed(volatile uint8_t *pin_reg, uint8_t pin, uint8_t *last_state) {
+ 513               		.loc 1 108 0
+ 514               		.cfi_startproc
+ 515               	.LVL65:
+ 516               	/* prologue: function */
+ 517               	/* frame size = 0 */
+ 518               	/* stack size = 0 */
+ 519               	.L__stack_usage = 0
+ 520 0170 DC01      		movw r26,r24
+ 521 0172 FA01      		movw r30,r20
+ 109:alarm.c       ****     uint8_t current_state = !(*pin_reg & (1<<pin)); // Active-low
+ 522               		.loc 1 109 0
+ 523 0174 2C91      		ld r18,X
+ 524               	.LVL66:
+ 110:alarm.c       ****     if(current_state && !(*last_state)){
+ 525               		.loc 1 110 0
+ 526 0176 30E0      		ldi r19,0
+ 527 0178 062E      		mov r0,r22
+ 528 017a 00C0      		rjmp 2f
+ 529               		1:
+ 530 017c 3595      		asr r19
+ 531 017e 2795      		ror r18
+ 532               		2:
+ 533 0180 0A94      		dec r0
+ 534 0182 02F4      		brpl 1b
+ 535               	.LVL67:
+ 536 0184 9081      		ld r25,Z
+ 537 0186 20FD      		sbrc r18,0
+ 538 0188 00C0      		rjmp .L24
+ 539               		.loc 1 110 0 is_stmt 0 discriminator 1
+ 540 018a 9111      		cpse r25,__zero_reg__
+ 541 018c 00C0      		rjmp .L31
+ 542               	.LVL68:
+ 543               	.LBB44:
+ 544               	.LBB45:
+ 187:/usr/lib/avr/include/util/delay.h **** 
+ 545               		.loc 2 187 0 is_stmt 1
+ 546 018e 2FE7      		ldi r18,lo8(79999)
+ 547 0190 88E3      		ldi r24,hi8(79999)
+ 548 0192 91E0      		ldi r25,hlo8(79999)
+ 549 0194 2150      	1:	subi r18,1
+ 550 0196 8040      		sbci r24,0
+ 551 0198 9040      		sbci r25,0
+ 552 019a 01F4      		brne 1b
+ 553               	.LVL69:
+ 554 019c 00C0      		rjmp .
+ 555 019e 0000      		nop
+ 556               	.LVL70:
+ 557               	.LBE45:
+ 558               	.LBE44:
+ 111:alarm.c       ****         _delay_ms(50);
+ 112:alarm.c       ****         current_state = !(*pin_reg & (1<<pin));
+ 559               		.loc 1 112 0
+ 560 01a0 8C91      		ld r24,X
+ 561               	.LVL71:
+ 113:alarm.c       ****         if(current_state){
+ 562               		.loc 1 113 0
+ 563 01a2 90E0      		ldi r25,0
+ 564 01a4 00C0      		rjmp 2f
+ 565               		1:
+ 566 01a6 9595      		asr r25
+ 567 01a8 8795      		ror r24
+ 568               		2:
+ 569 01aa 6A95      		dec r22
+ 570 01ac 02F4      		brpl 1b
+ 571               	.LVL72:
+ 572 01ae 80FD      		sbrc r24,0
+ 573 01b0 00C0      		rjmp .L31
+ 114:alarm.c       ****             *last_state = 1;
+ 574               		.loc 1 114 0
+ 575 01b2 81E0      		ldi r24,lo8(1)
+ 576 01b4 8083      		st Z,r24
+ 115:alarm.c       ****             return 1;
+ 577               		.loc 1 115 0
+ 578 01b6 0895      		ret
+ 579               	.LVL73:
+ 580               	.L24:
+ 581               	.LBB46:
+ 582               	.LBB47:
+ 116:alarm.c       ****         }
+ 117:alarm.c       ****     } else if(!current_state && *last_state) {
+ 583               		.loc 1 117 0
+ 584 01b8 9111      		cpse r25,__zero_reg__
+ 118:alarm.c       ****         *last_state = 0;
+ 585               		.loc 1 118 0
+ 586 01ba 1082      		st Z,__zero_reg__
+ 587               	.LVL74:
+ 588               	.L31:
+ 589 01bc 80E0      		ldi r24,0
+ 590               	.LBE47:
+ 591               	.LBE46:
+ 119:alarm.c       ****     }
+ 120:alarm.c       ****     return 0;
+ 121:alarm.c       **** }
+ 592               		.loc 1 121 0
+ 593 01be 0895      		ret
+ 594               		.cfi_endproc
+ 595               	.LFE17:
+ 597               	.global	buzzer_on
+ 599               	buzzer_on:
+ 600               	.LFB18:
+ 122:alarm.c       **** 
+ 123:alarm.c       **** // -------------------- BUZZER --------------------
+ 124:alarm.c       **** void buzzer_on(){ PORTB |= (1<<BUZZER); }
+ 601               		.loc 1 124 0
+ 602               		.cfi_startproc
+ 603               	/* prologue: function */
+ 604               	/* frame size = 0 */
+ 605               	/* stack size = 0 */
+ 606               	.L__stack_usage = 0
+ 607               		.loc 1 124 0
+ 608 01c0 2C9A      		sbi 0x5,4
+ 609 01c2 0895      		ret
+ 610               		.cfi_endproc
+ 611               	.LFE18:
+ 613               	.global	buzzer_off
+ 615               	buzzer_off:
+ 616               	.LFB19:
+ 125:alarm.c       **** void buzzer_off(){ PORTB &= ~(1<<BUZZER); }
+ 617               		.loc 1 125 0
+ 618               		.cfi_startproc
+ 619               	/* prologue: function */
+ 620               	/* frame size = 0 */
+ 621               	/* stack size = 0 */
+ 622               	.L__stack_usage = 0
+ 623               		.loc 1 125 0
+ 624 01c4 2C98      		cbi 0x5,4
+ 625 01c6 0895      		ret
+ 626               		.cfi_endproc
+ 627               	.LFE19:
+ 629               		.section	.rodata.str1.1,"aMS",@progbits,1
+ 630               	.LC0:
+ 631 0000 4872 00   		.string	"Hr"
+ 632               	.LC1:
+ 633 0003 4D6E 00   		.string	"Mn"
+ 634               	.LC2:
+ 635 0006 5469 6D65 		.string	"Time %02d:%02d:%02d  "
+ 635      2025 3032 
+ 635      643A 2530 
+ 635      3264 3A25 
+ 635      3032 6420 
+ 636               	.LC3:
+ 637 001c 4120 2530 		.string	"A %02d:%02d B %02d:%02d"
+ 637      3264 3A25 
+ 637      3032 6420 
+ 637      4220 2530 
+ 637      3264 3A25 
+ 638               	.LC4:
+ 639 0034 5365 7420 		.string	"Set A %s %02d:%02d"
+ 639      4120 2573 
+ 639      2025 3032 
+ 639      643A 2530 
+ 639      3264 00
+ 640               	.LC5:
+ 641 0047 5365 7420 		.string	"Set B %s %02d:%02d"
+ 641      4220 2573 
+ 641      2025 3032 
+ 641      643A 2530 
+ 641      3264 00
+ 642               		.section	.text.startup,"ax",@progbits
+ 643               	.global	main
+ 645               	main:
+ 646               	.LFB20:
+ 126:alarm.c       **** 
+ 127:alarm.c       **** // -------------------- MAIN --------------------
+ 128:alarm.c       **** int main(void){
+ 647               		.loc 1 128 0
+ 648               		.cfi_startproc
+ 649 0000 CF93      		push r28
+ 650               	.LCFI12:
+ 651               		.cfi_def_cfa_offset 3
+ 652               		.cfi_offset 28, -2
+ 653 0002 DF93      		push r29
+ 654               	.LCFI13:
+ 655               		.cfi_def_cfa_offset 4
+ 656               		.cfi_offset 29, -3
+ 657 0004 00D0      		rcall .
+ 658 0006 1F92      		push __zero_reg__
+ 659               	.LCFI14:
+ 660               		.cfi_def_cfa_offset 7
+ 661 0008 CDB7      		in r28,__SP_L__
+ 662 000a DEB7      		in r29,__SP_H__
+ 663               	.LCFI15:
+ 664               		.cfi_def_cfa_register 28
+ 665               	/* prologue: function */
+ 666               	/* frame size = 3 */
+ 667               	/* stack size = 5 */
+ 668               	.L__stack_usage = 5
+ 129:alarm.c       ****     uint8_t hour,min,sec;
+ 130:alarm.c       **** 
+ 131:alarm.c       ****     // Init LCD & RTC
+ 132:alarm.c       ****     lcd_init();
+ 669               		.loc 1 132 0
+ 670 000c 0E94 0000 		call lcd_init
+ 671               	.LVL75:
+ 133:alarm.c       ****     lcd_clear();
+ 672               		.loc 1 133 0
+ 673 0010 0E94 0000 		call lcd_clear
+ 674               	.LVL76:
+ 134:alarm.c       ****     ds1302_init();
+ 675               		.loc 1 134 0
+ 676 0014 0E94 0000 		call ds1302_init
+ 677               	.LVL77:
+ 135:alarm.c       **** 
+ 136:alarm.c       ****     // Init buttons & buzzer
+ 137:alarm.c       ****     DDRB &= ~(1<<BTN_SET); PORTB |= (1<<BTN_SET);
+ 678               		.loc 1 137 0
+ 679 0018 2598      		cbi 0x4,5
+ 680 001a 2D9A      		sbi 0x5,5
+ 138:alarm.c       ****     DDRC &= ~(1<<BTN_NEXT | 1<<BTN_UP); PORTC |= (1<<BTN_NEXT | 1<<BTN_UP);
+ 681               		.loc 1 138 0
+ 682 001c 87B1      		in r24,0x7
+ 683 001e 8F7C      		andi r24,lo8(-49)
+ 684 0020 87B9      		out 0x7,r24
+ 685 0022 88B1      		in r24,0x8
+ 686 0024 8063      		ori r24,lo8(48)
+ 687 0026 88B9      		out 0x8,r24
+ 139:alarm.c       ****     DDRD &= ~(1<<BTN_DOWN); PORTD |= (1<<BTN_DOWN);
+ 688               		.loc 1 139 0
+ 689 0028 5798      		cbi 0xa,7
+ 690 002a 5F9A      		sbi 0xb,7
+ 140:alarm.c       ****     DDRB |= (1<<BUZZER);
+ 691               		.loc 1 140 0
+ 692 002c 249A      		sbi 0x4,4
+ 141:alarm.c       **** 
+ 142:alarm.c       ****     // Set time once (comment after first upload)
+ 143:alarm.c       ****     ds1302_set_time(12,0,0);
+ 693               		.loc 1 143 0
+ 694 002e 40E0      		ldi r20,0
+ 695 0030 60E0      		ldi r22,0
+ 696 0032 8CE0      		ldi r24,lo8(12)
+ 697 0034 0E94 0000 		call ds1302_set_time
+ 698               	.LVL78:
+ 144:alarm.c       **** 
+ 145:alarm.c       ****     while(1){
+ 146:alarm.c       ****         ds1302_get_time(&hour,&min,&sec);
+ 147:alarm.c       **** 
+ 148:alarm.c       ****         // Handle buttons
+ 149:alarm.c       ****         if(button_pressed(&PINB,BTN_SET,&last_btn_set)){
+ 150:alarm.c       ****             mode++;
+ 151:alarm.c       ****             if(mode>MODE_SET_ALARM2) mode=MODE_NORMAL;
+ 152:alarm.c       ****             edit_field=0;
+ 153:alarm.c       ****         }
+ 154:alarm.c       ****         if(button_pressed(&PINC,BTN_NEXT,&last_btn_next) && mode!=MODE_NORMAL){
+ 155:alarm.c       ****             edit_field ^=1;
+ 156:alarm.c       ****         }
+ 157:alarm.c       **** 
+ 158:alarm.c       ****         // Alarm1 editing
+ 159:alarm.c       ****         if(mode==MODE_SET_ALARM1){
+ 160:alarm.c       ****             if(button_pressed(&PINC,BTN_UP,&last_btn_up)){
+ 161:alarm.c       ****                 if(edit_field==0) alarm1_hour=(alarm1_hour+1)%24;
+ 162:alarm.c       ****                 else alarm1_min=(alarm1_min+1)%60;
+ 163:alarm.c       ****             }
+ 164:alarm.c       ****             if(button_pressed(&PIND,BTN_DOWN,&last_btn_down)){
+ 165:alarm.c       ****                 if(edit_field==0) alarm1_hour=(alarm1_hour+23)%24;
+ 166:alarm.c       ****                 else alarm1_min=(alarm1_min+59)%60;
+ 699               		.loc 1 166 0
+ 700 0038 0CE3      		ldi r16,lo8(60)
+ 701 003a 10E0      		ldi r17,0
+ 165:alarm.c       ****                 else alarm1_min=(alarm1_min+59)%60;
+ 702               		.loc 1 165 0
+ 703 003c 88E1      		ldi r24,lo8(24)
+ 704 003e E82E      		mov r14,r24
+ 705 0040 F12C      		mov r15,__zero_reg__
+ 155:alarm.c       ****         }
+ 706               		.loc 1 155 0
+ 707 0042 5524      		clr r5
+ 708 0044 5394      		inc r5
+ 167:alarm.c       ****             }
+ 168:alarm.c       ****         }
+ 169:alarm.c       ****         // Alarm2 editing
+ 170:alarm.c       ****         if(mode==MODE_SET_ALARM2){
+ 171:alarm.c       ****             if(button_pressed(&PINC,BTN_UP,&last_btn_up)){
+ 172:alarm.c       ****                 if(edit_field==0) alarm2_hour=(alarm2_hour+1)%24;
+ 173:alarm.c       ****                 else alarm2_min=(alarm2_min+1)%60;
+ 174:alarm.c       ****             }
+ 175:alarm.c       ****             if(button_pressed(&PIND,BTN_DOWN,&last_btn_down)){
+ 176:alarm.c       ****                 if(edit_field==0) alarm2_hour=(alarm2_hour+23)%24;
+ 177:alarm.c       ****                 else alarm2_min=(alarm2_min+59)%60;
+ 178:alarm.c       ****             }
+ 179:alarm.c       ****         }
+ 180:alarm.c       **** 
+ 181:alarm.c       ****         // LCD Display
+ 182:alarm.c       ****         lcd_goto(0,0);
+ 183:alarm.c       ****         lcd_printf("Time %02d:%02d:%02d  ",hour,min,sec);
+ 709               		.loc 1 183 0
+ 710 0046 90E0      		ldi r25,lo8(.LC2)
+ 711 0048 692E      		mov r6,r25
+ 712 004a 90E0      		ldi r25,hi8(.LC2)
+ 713 004c 792E      		mov r7,r25
+ 184:alarm.c       ****         lcd_goto(1,0);
+ 185:alarm.c       ****         if(mode==MODE_NORMAL)
+ 186:alarm.c       ****             lcd_printf("A %02d:%02d B %02d:%02d",alarm1_hour,alarm1_min,alarm2_hour,alarm2_min);
+ 187:alarm.c       ****         else if(mode==MODE_SET_ALARM1)
+ 188:alarm.c       ****             lcd_printf("Set A %s %02d:%02d",(edit_field==0)?"Hr":"Mn",alarm1_hour,alarm1_min);
+ 189:alarm.c       ****         else if(mode==MODE_SET_ALARM2)
+ 190:alarm.c       ****             lcd_printf("Set B %s %02d:%02d",(edit_field==0)?"Hr":"Mn",alarm2_hour,alarm2_min);
+ 714               		.loc 1 190 0
+ 715 004e 20E0      		ldi r18,lo8(.LC5)
+ 716 0050 C22E      		mov r12,r18
+ 717 0052 20E0      		ldi r18,hi8(.LC5)
+ 718 0054 D22E      		mov r13,r18
+ 188:alarm.c       ****         else if(mode==MODE_SET_ALARM2)
+ 719               		.loc 1 188 0
+ 720 0056 30E0      		ldi r19,lo8(.LC4)
+ 721 0058 A32E      		mov r10,r19
+ 722 005a 30E0      		ldi r19,hi8(.LC4)
+ 723 005c B32E      		mov r11,r19
+ 186:alarm.c       ****         else if(mode==MODE_SET_ALARM1)
+ 724               		.loc 1 186 0
+ 725 005e 40E0      		ldi r20,lo8(.LC3)
+ 726 0060 842E      		mov r8,r20
+ 727 0062 40E0      		ldi r20,hi8(.LC3)
+ 728 0064 942E      		mov r9,r20
+ 729               	.L59:
+ 146:alarm.c       **** 
+ 730               		.loc 1 146 0
+ 731 0066 AE01      		movw r20,r28
+ 732 0068 4F5F      		subi r20,-1
+ 733 006a 5F4F      		sbci r21,-1
+ 734 006c BE01      		movw r22,r28
+ 735 006e 6E5F      		subi r22,-2
+ 736 0070 7F4F      		sbci r23,-1
+ 737 0072 CE01      		movw r24,r28
+ 738 0074 0396      		adiw r24,3
+ 739 0076 0E94 0000 		call ds1302_get_time
+ 740               	.LVL79:
+ 149:alarm.c       ****             mode++;
+ 741               		.loc 1 149 0
+ 742 007a 40E0      		ldi r20,lo8(last_btn_set)
+ 743 007c 50E0      		ldi r21,hi8(last_btn_set)
+ 744 007e 65E0      		ldi r22,lo8(5)
+ 745 0080 83E2      		ldi r24,lo8(35)
+ 746 0082 90E0      		ldi r25,0
+ 747 0084 0E94 0000 		call button_pressed
+ 748               	.LVL80:
+ 749 0088 8823      		tst r24
+ 750 008a 01F0      		breq .L35
+ 150:alarm.c       ****             if(mode>MODE_SET_ALARM2) mode=MODE_NORMAL;
+ 751               		.loc 1 150 0
+ 752 008c 8091 0000 		lds r24,mode
+ 753 0090 8F5F      		subi r24,lo8(-(1))
+ 151:alarm.c       ****             edit_field=0;
+ 754               		.loc 1 151 0
+ 755 0092 8330      		cpi r24,lo8(3)
+ 756 0094 00F4      		brsh .L36
+ 150:alarm.c       ****             if(mode>MODE_SET_ALARM2) mode=MODE_NORMAL;
+ 757               		.loc 1 150 0
+ 758 0096 8093 0000 		sts mode,r24
+ 759 009a 00C0      		rjmp .L37
+ 760               	.L36:
+ 151:alarm.c       ****             edit_field=0;
+ 761               		.loc 1 151 0 discriminator 1
+ 762 009c 1092 0000 		sts mode,__zero_reg__
+ 763               	.L37:
+ 152:alarm.c       ****         }
+ 764               		.loc 1 152 0
+ 765 00a0 1092 0000 		sts edit_field,__zero_reg__
+ 766               	.L35:
+ 154:alarm.c       ****             edit_field ^=1;
+ 767               		.loc 1 154 0
+ 768 00a4 40E0      		ldi r20,lo8(last_btn_next)
+ 769 00a6 50E0      		ldi r21,hi8(last_btn_next)
+ 770 00a8 64E0      		ldi r22,lo8(4)
+ 771 00aa 86E2      		ldi r24,lo8(38)
+ 772 00ac 90E0      		ldi r25,0
+ 773 00ae 0E94 0000 		call button_pressed
+ 774               	.LVL81:
+ 775 00b2 9091 0000 		lds r25,mode
+ 776 00b6 8823      		tst r24
+ 777 00b8 01F0      		breq .L38
+ 154:alarm.c       ****             edit_field ^=1;
+ 778               		.loc 1 154 0 is_stmt 0 discriminator 1
+ 779 00ba 9923      		tst r25
+ 780 00bc 01F4      		brne .+2
+ 781 00be 00C0      		rjmp .L40
+ 155:alarm.c       ****         }
+ 782               		.loc 1 155 0 is_stmt 1
+ 783 00c0 8091 0000 		lds r24,edit_field
+ 784 00c4 8525      		eor r24,r5
+ 785 00c6 8093 0000 		sts edit_field,r24
+ 786               	.L38:
+ 159:alarm.c       ****             if(button_pressed(&PINC,BTN_UP,&last_btn_up)){
+ 787               		.loc 1 159 0
+ 788 00ca 9130      		cpi r25,lo8(1)
+ 789 00cc 01F0      		breq .+2
+ 790 00ce 00C0      		rjmp .L40
+ 160:alarm.c       ****                 if(edit_field==0) alarm1_hour=(alarm1_hour+1)%24;
+ 791               		.loc 1 160 0
+ 792 00d0 40E0      		ldi r20,lo8(last_btn_up)
+ 793 00d2 50E0      		ldi r21,hi8(last_btn_up)
+ 794 00d4 65E0      		ldi r22,lo8(5)
+ 795 00d6 86E2      		ldi r24,lo8(38)
+ 796 00d8 90E0      		ldi r25,0
+ 797 00da 0E94 0000 		call button_pressed
+ 798               	.LVL82:
+ 799 00de 8823      		tst r24
+ 800 00e0 01F0      		breq .L41
+ 161:alarm.c       ****                 else alarm1_min=(alarm1_min+1)%60;
+ 801               		.loc 1 161 0
+ 802 00e2 8091 0000 		lds r24,edit_field
+ 803 00e6 8111      		cpse r24,__zero_reg__
+ 804 00e8 00C0      		rjmp .L42
+ 161:alarm.c       ****                 else alarm1_min=(alarm1_min+1)%60;
+ 805               		.loc 1 161 0 is_stmt 0 discriminator 1
+ 806 00ea 8091 0000 		lds r24,alarm1_hour
+ 807 00ee 90E0      		ldi r25,0
+ 808 00f0 0196      		adiw r24,1
+ 809 00f2 B701      		movw r22,r14
+ 810 00f4 0E94 0000 		call __divmodhi4
+ 811 00f8 8093 0000 		sts alarm1_hour,r24
+ 812 00fc 00C0      		rjmp .L41
+ 813               	.L42:
+ 162:alarm.c       ****             }
+ 814               		.loc 1 162 0 is_stmt 1
+ 815 00fe 8091 0000 		lds r24,alarm1_min
+ 816 0102 90E0      		ldi r25,0
+ 817 0104 0196      		adiw r24,1
+ 818 0106 B801      		movw r22,r16
+ 819 0108 0E94 0000 		call __divmodhi4
+ 820 010c 8093 0000 		sts alarm1_min,r24
+ 821               	.L41:
+ 164:alarm.c       ****                 if(edit_field==0) alarm1_hour=(alarm1_hour+23)%24;
+ 822               		.loc 1 164 0
+ 823 0110 40E0      		ldi r20,lo8(last_btn_down)
+ 824 0112 50E0      		ldi r21,hi8(last_btn_down)
+ 825 0114 67E0      		ldi r22,lo8(7)
+ 826 0116 89E2      		ldi r24,lo8(41)
+ 827 0118 90E0      		ldi r25,0
+ 828 011a 0E94 0000 		call button_pressed
+ 829               	.LVL83:
+ 830 011e 8823      		tst r24
+ 831 0120 01F0      		breq .L40
+ 165:alarm.c       ****                 else alarm1_min=(alarm1_min+59)%60;
+ 832               		.loc 1 165 0
+ 833 0122 8091 0000 		lds r24,edit_field
+ 834 0126 8111      		cpse r24,__zero_reg__
+ 835 0128 00C0      		rjmp .L44
+ 165:alarm.c       ****                 else alarm1_min=(alarm1_min+59)%60;
+ 836               		.loc 1 165 0 is_stmt 0 discriminator 1
+ 837 012a 8091 0000 		lds r24,alarm1_hour
+ 838 012e 90E0      		ldi r25,0
+ 839 0130 4796      		adiw r24,23
+ 840 0132 B701      		movw r22,r14
+ 841 0134 0E94 0000 		call __divmodhi4
+ 842 0138 8093 0000 		sts alarm1_hour,r24
+ 843 013c 00C0      		rjmp .L40
+ 844               	.L44:
+ 166:alarm.c       ****             }
+ 845               		.loc 1 166 0 is_stmt 1
+ 846 013e 8091 0000 		lds r24,alarm1_min
+ 847 0142 90E0      		ldi r25,0
+ 848 0144 CB96      		adiw r24,59
+ 849 0146 B801      		movw r22,r16
+ 850 0148 0E94 0000 		call __divmodhi4
+ 851 014c 8093 0000 		sts alarm1_min,r24
+ 852               	.L40:
+ 170:alarm.c       ****             if(button_pressed(&PINC,BTN_UP,&last_btn_up)){
+ 853               		.loc 1 170 0
+ 854 0150 8091 0000 		lds r24,mode
+ 855 0154 8230      		cpi r24,lo8(2)
+ 856 0156 01F0      		breq .+2
+ 857 0158 00C0      		rjmp .L46
+ 171:alarm.c       ****                 if(edit_field==0) alarm2_hour=(alarm2_hour+1)%24;
+ 858               		.loc 1 171 0
+ 859 015a 40E0      		ldi r20,lo8(last_btn_up)
+ 860 015c 50E0      		ldi r21,hi8(last_btn_up)
+ 861 015e 65E0      		ldi r22,lo8(5)
+ 862 0160 86E2      		ldi r24,lo8(38)
+ 863 0162 90E0      		ldi r25,0
+ 864 0164 0E94 0000 		call button_pressed
+ 865               	.LVL84:
+ 866 0168 8823      		tst r24
+ 867 016a 01F0      		breq .L47
+ 172:alarm.c       ****                 else alarm2_min=(alarm2_min+1)%60;
+ 868               		.loc 1 172 0
+ 869 016c 8091 0000 		lds r24,edit_field
+ 870 0170 8111      		cpse r24,__zero_reg__
+ 871 0172 00C0      		rjmp .L48
+ 172:alarm.c       ****                 else alarm2_min=(alarm2_min+1)%60;
+ 872               		.loc 1 172 0 is_stmt 0 discriminator 1
+ 873 0174 8091 0000 		lds r24,alarm2_hour
+ 874 0178 90E0      		ldi r25,0
+ 875 017a 0196      		adiw r24,1
+ 876 017c B701      		movw r22,r14
+ 877 017e 0E94 0000 		call __divmodhi4
+ 878 0182 8093 0000 		sts alarm2_hour,r24
+ 879 0186 00C0      		rjmp .L47
+ 880               	.L48:
+ 173:alarm.c       ****             }
+ 881               		.loc 1 173 0 is_stmt 1
+ 882 0188 8091 0000 		lds r24,alarm2_min
+ 883 018c 90E0      		ldi r25,0
+ 884 018e 0196      		adiw r24,1
+ 885 0190 B801      		movw r22,r16
+ 886 0192 0E94 0000 		call __divmodhi4
+ 887 0196 8093 0000 		sts alarm2_min,r24
+ 888               	.L47:
+ 175:alarm.c       ****                 if(edit_field==0) alarm2_hour=(alarm2_hour+23)%24;
+ 889               		.loc 1 175 0
+ 890 019a 40E0      		ldi r20,lo8(last_btn_down)
+ 891 019c 50E0      		ldi r21,hi8(last_btn_down)
+ 892 019e 67E0      		ldi r22,lo8(7)
+ 893 01a0 89E2      		ldi r24,lo8(41)
+ 894 01a2 90E0      		ldi r25,0
+ 895 01a4 0E94 0000 		call button_pressed
+ 896               	.LVL85:
+ 897 01a8 8823      		tst r24
+ 898 01aa 01F0      		breq .L46
+ 176:alarm.c       ****                 else alarm2_min=(alarm2_min+59)%60;
+ 899               		.loc 1 176 0
+ 900 01ac 8091 0000 		lds r24,edit_field
+ 901 01b0 8111      		cpse r24,__zero_reg__
+ 902 01b2 00C0      		rjmp .L50
+ 176:alarm.c       ****                 else alarm2_min=(alarm2_min+59)%60;
+ 903               		.loc 1 176 0 is_stmt 0 discriminator 1
+ 904 01b4 8091 0000 		lds r24,alarm2_hour
+ 905 01b8 90E0      		ldi r25,0
+ 906 01ba 4796      		adiw r24,23
+ 907 01bc B701      		movw r22,r14
+ 908 01be 0E94 0000 		call __divmodhi4
+ 909 01c2 8093 0000 		sts alarm2_hour,r24
+ 910 01c6 00C0      		rjmp .L46
+ 911               	.L50:
+ 177:alarm.c       ****             }
+ 912               		.loc 1 177 0 is_stmt 1
+ 913 01c8 8091 0000 		lds r24,alarm2_min
+ 914 01cc 90E0      		ldi r25,0
+ 915 01ce CB96      		adiw r24,59
+ 916 01d0 B801      		movw r22,r16
+ 917 01d2 0E94 0000 		call __divmodhi4
+ 918 01d6 8093 0000 		sts alarm2_min,r24
+ 919               	.L46:
+ 182:alarm.c       ****         lcd_printf("Time %02d:%02d:%02d  ",hour,min,sec);
+ 920               		.loc 1 182 0
+ 921 01da 60E0      		ldi r22,0
+ 922 01dc 80E0      		ldi r24,0
+ 923 01de 0E94 0000 		call lcd_goto
+ 924               	.LVL86:
+ 183:alarm.c       ****         lcd_goto(1,0);
+ 925               		.loc 1 183 0
+ 926 01e2 8981      		ldd r24,Y+1
+ 927 01e4 1F92      		push __zero_reg__
+ 928 01e6 8F93      		push r24
+ 929 01e8 8A81      		ldd r24,Y+2
+ 930 01ea 1F92      		push __zero_reg__
+ 931 01ec 8F93      		push r24
+ 932 01ee 8B81      		ldd r24,Y+3
+ 933 01f0 1F92      		push __zero_reg__
+ 934 01f2 8F93      		push r24
+ 935 01f4 7F92      		push r7
+ 936 01f6 6F92      		push r6
+ 937 01f8 0E94 0000 		call lcd_printf
+ 938               	.LVL87:
+ 184:alarm.c       ****         if(mode==MODE_NORMAL)
+ 939               		.loc 1 184 0
+ 940 01fc 60E0      		ldi r22,0
+ 941 01fe 81E0      		ldi r24,lo8(1)
+ 942 0200 0E94 0000 		call lcd_goto
+ 943               	.LVL88:
+ 185:alarm.c       ****             lcd_printf("A %02d:%02d B %02d:%02d",alarm1_hour,alarm1_min,alarm2_hour,alarm2_min);
+ 944               		.loc 1 185 0
+ 945 0204 8091 0000 		lds r24,mode
+ 946 0208 0FB6      		in __tmp_reg__,__SREG__
+ 947 020a F894      		cli
+ 948 020c DEBF      		out __SP_H__,r29
+ 949 020e 0FBE      		out __SREG__,__tmp_reg__
+ 950 0210 CDBF      		out __SP_L__,r28
+ 951 0212 8111      		cpse r24,__zero_reg__
+ 952 0214 00C0      		rjmp .L51
+ 186:alarm.c       ****         else if(mode==MODE_SET_ALARM1)
+ 953               		.loc 1 186 0
+ 954 0216 8091 0000 		lds r24,alarm2_min
+ 955 021a 1F92      		push __zero_reg__
+ 956 021c 8F93      		push r24
+ 957 021e 8091 0000 		lds r24,alarm2_hour
+ 958 0222 1F92      		push __zero_reg__
+ 959 0224 8F93      		push r24
+ 960 0226 8091 0000 		lds r24,alarm1_min
+ 961 022a 1F92      		push __zero_reg__
+ 962 022c 8F93      		push r24
+ 963 022e 8091 0000 		lds r24,alarm1_hour
+ 964 0232 1F92      		push __zero_reg__
+ 965 0234 8F93      		push r24
+ 966 0236 9F92      		push r9
+ 967 0238 8F92      		push r8
+ 968 023a 0E94 0000 		call lcd_printf
+ 969               	.LVL89:
+ 970 023e 00C0      		rjmp .L83
+ 971               	.L51:
+ 187:alarm.c       ****             lcd_printf("Set A %s %02d:%02d",(edit_field==0)?"Hr":"Mn",alarm1_hour,alarm1_min);
+ 972               		.loc 1 187 0
+ 973 0240 8130      		cpi r24,lo8(1)
+ 974 0242 01F4      		brne .L53
+ 188:alarm.c       ****         else if(mode==MODE_SET_ALARM2)
+ 975               		.loc 1 188 0
+ 976 0244 3091 0000 		lds r19,alarm1_min
+ 977 0248 2091 0000 		lds r18,alarm1_hour
+ 978 024c 8091 0000 		lds r24,edit_field
+ 979 0250 8823      		tst r24
+ 980 0252 01F0      		breq .L60
+ 981 0254 80E0      		ldi r24,lo8(.LC1)
+ 982 0256 90E0      		ldi r25,hi8(.LC1)
+ 983 0258 00C0      		rjmp .L54
+ 984               	.L60:
+ 985 025a 80E0      		ldi r24,lo8(.LC0)
+ 986 025c 90E0      		ldi r25,hi8(.LC0)
+ 987               	.L54:
+ 188:alarm.c       ****         else if(mode==MODE_SET_ALARM2)
+ 988               		.loc 1 188 0 is_stmt 0 discriminator 4
+ 989 025e 1F92      		push __zero_reg__
+ 990 0260 3F93      		push r19
+ 991 0262 1F92      		push __zero_reg__
+ 992 0264 2F93      		push r18
+ 993 0266 9F93      		push r25
+ 994 0268 8F93      		push r24
+ 995 026a BF92      		push r11
+ 996 026c AF92      		push r10
+ 997 026e 00C0      		rjmp .L84
+ 998               	.L53:
+ 189:alarm.c       ****             lcd_printf("Set B %s %02d:%02d",(edit_field==0)?"Hr":"Mn",alarm2_hour,alarm2_min);
+ 999               		.loc 1 189 0 is_stmt 1
+ 1000 0270 8230      		cpi r24,lo8(2)
+ 1001 0272 01F4      		brne .L52
+ 1002               		.loc 1 190 0
+ 1003 0274 3091 0000 		lds r19,alarm2_min
+ 1004 0278 2091 0000 		lds r18,alarm2_hour
+ 1005 027c 8091 0000 		lds r24,edit_field
+ 1006 0280 8823      		tst r24
+ 1007 0282 01F0      		breq .L61
+ 1008 0284 80E0      		ldi r24,lo8(.LC1)
+ 1009 0286 90E0      		ldi r25,hi8(.LC1)
+ 1010 0288 00C0      		rjmp .L55
+ 1011               	.L61:
+ 1012 028a 80E0      		ldi r24,lo8(.LC0)
+ 1013 028c 90E0      		ldi r25,hi8(.LC0)
+ 1014               	.L55:
+ 1015               		.loc 1 190 0 is_stmt 0 discriminator 4
+ 1016 028e 1F92      		push __zero_reg__
+ 1017 0290 3F93      		push r19
+ 1018 0292 1F92      		push __zero_reg__
+ 1019 0294 2F93      		push r18
+ 1020 0296 9F93      		push r25
+ 1021 0298 8F93      		push r24
+ 1022 029a DF92      		push r13
+ 1023 029c CF92      		push r12
+ 1024               	.L84:
+ 1025 029e 0E94 0000 		call lcd_printf
+ 1026               	.LVL90:
+ 1027               	.L83:
+ 1028 02a2 0FB6      		in __tmp_reg__,__SREG__
+ 1029 02a4 F894      		cli
+ 1030 02a6 DEBF      		out __SP_H__,r29
+ 1031 02a8 0FBE      		out __SREG__,__tmp_reg__
+ 1032 02aa CDBF      		out __SP_L__,r28
+ 1033               	.L52:
+ 191:alarm.c       **** 
+ 192:alarm.c       ****         // Check alarms
+ 193:alarm.c       ****         if(mode==MODE_NORMAL){
+ 1034               		.loc 1 193 0 is_stmt 1
+ 1035 02ac 8091 0000 		lds r24,mode
+ 1036 02b0 8111      		cpse r24,__zero_reg__
+ 1037 02b2 00C0      		rjmp .L56
+ 194:alarm.c       ****             if((hour==alarm1_hour && min==alarm1_min && sec==0) ||
+ 1038               		.loc 1 194 0
+ 1039 02b4 8B81      		ldd r24,Y+3
+ 1040 02b6 9091 0000 		lds r25,alarm1_hour
+ 1041 02ba 8913      		cpse r24,r25
+ 1042 02bc 00C0      		rjmp .L57
+ 1043               		.loc 1 194 0 is_stmt 0 discriminator 1
+ 1044 02be 2A81      		ldd r18,Y+2
+ 1045 02c0 9091 0000 		lds r25,alarm1_min
+ 1046 02c4 2917      		cp r18,r25
+ 1047 02c6 01F0      		breq .L58
+ 1048               	.L57:
+ 1049               		.loc 1 194 0 discriminator 4
+ 1050 02c8 9091 0000 		lds r25,alarm2_hour
+ 1051 02cc 8913      		cpse r24,r25
+ 1052 02ce 00C0      		rjmp .L56
+ 195:alarm.c       ****                (hour==alarm2_hour && min==alarm2_min && sec==0)){
+ 1053               		.loc 1 195 0 is_stmt 1
+ 1054 02d0 9A81      		ldd r25,Y+2
+ 1055 02d2 8091 0000 		lds r24,alarm2_min
+ 1056 02d6 9813      		cpse r25,r24
+ 1057 02d8 00C0      		rjmp .L56
+ 1058               	.L58:
+ 194:alarm.c       ****             if((hour==alarm1_hour && min==alarm1_min && sec==0) ||
+ 1059               		.loc 1 194 0 discriminator 3
+ 1060 02da 8981      		ldd r24,Y+1
+ 1061 02dc 8111      		cpse r24,__zero_reg__
+ 1062 02de 00C0      		rjmp .L56
+ 196:alarm.c       ****                 buzzer_on();
+ 1063               		.loc 1 196 0
+ 1064 02e0 0E94 0000 		call buzzer_on
+ 1065               	.LVL91:
+ 1066               	.LBB48:
+ 1067               	.LBB49:
+ 187:/usr/lib/avr/include/util/delay.h **** 
+ 1068               		.loc 2 187 0
+ 1069 02e4 9FEF      		ldi r25,lo8(7999999)
+ 1070 02e6 21E1      		ldi r18,hi8(7999999)
+ 1071 02e8 3AE7      		ldi r19,hlo8(7999999)
+ 1072 02ea 9150      	1:	subi r25,1
+ 1073 02ec 2040      		sbci r18,0
+ 1074 02ee 3040      		sbci r19,0
+ 1075 02f0 01F4      		brne 1b
+ 1076 02f2 00C0      		rjmp .
+ 1077 02f4 0000      		nop
+ 1078               	.LVL92:
+ 1079               	.LBE49:
+ 1080               	.LBE48:
+ 197:alarm.c       ****                 _delay_ms(5000);
+ 198:alarm.c       ****                 buzzer_off();
+ 1081               		.loc 1 198 0
+ 1082 02f6 0E94 0000 		call buzzer_off
+ 1083               	.LVL93:
+ 1084               	.L56:
+ 1085               	.LBB50:
+ 1086               	.LBB51:
+ 187:/usr/lib/avr/include/util/delay.h **** 
+ 1087               		.loc 2 187 0
+ 1088 02fa 8FEF      		ldi r24,lo8(159999)
+ 1089 02fc 90E7      		ldi r25,hi8(159999)
+ 1090 02fe 22E0      		ldi r18,hlo8(159999)
+ 1091 0300 8150      	1:	subi r24,1
+ 1092 0302 9040      		sbci r25,0
+ 1093 0304 2040      		sbci r18,0
+ 1094 0306 01F4      		brne 1b
+ 1095 0308 00C0      		rjmp .
+ 1096 030a 0000      		nop
+ 1097 030c 00C0      		rjmp .L59
+ 1098               	.LBE51:
+ 1099               	.LBE50:
+ 1100               		.cfi_endproc
+ 1101               	.LFE20:
+ 1103               	.global	last_btn_down
+ 1104               		.section .bss
+ 1107               	last_btn_down:
+ 1108 0000 00        		.zero	1
+ 1109               	.global	last_btn_up
+ 1112               	last_btn_up:
+ 1113 0001 00        		.zero	1
+ 1114               	.global	last_btn_next
+ 1117               	last_btn_next:
+ 1118 0002 00        		.zero	1
+ 1119               	.global	last_btn_set
+ 1122               	last_btn_set:
+ 1123 0003 00        		.zero	1
+ 1124               	.global	edit_field
+ 1127               	edit_field:
+ 1128 0004 00        		.zero	1
+ 1129               	.global	mode
+ 1132               	mode:
+ 1133 0005 00        		.zero	1
+ 1134               	.global	alarm2_min
+ 1135               		.data
+ 1138               	alarm2_min:
+ 1139 0000 1E        		.byte	30
+ 1140               	.global	alarm2_hour
+ 1143               	alarm2_hour:
+ 1144 0001 0C        		.byte	12
+ 1145               	.global	alarm1_min
+ 1146               		.section .bss
+ 1149               	alarm1_min:
+ 1150 0006 00        		.zero	1
+ 1151               	.global	alarm1_hour
+ 1152               		.data
+ 1155               	alarm1_hour:
+ 1156 0002 0C        		.byte	12
+ 1157               		.text
+ 1158               	.Letext0:
+ 1159               		.file 3 "/usr/lib/avr/include/stdint.h"
+ 1160               		.file 4 "lcd.h"
+DEFINED SYMBOLS
+                            *ABS*:0000000000000000 alarm.c
+     /tmp/ccJPDfdd.s:2      *ABS*:000000000000003e __SP_H__
+     /tmp/ccJPDfdd.s:3      *ABS*:000000000000003d __SP_L__
+     /tmp/ccJPDfdd.s:4      *ABS*:000000000000003f __SREG__
+     /tmp/ccJPDfdd.s:5      *ABS*:0000000000000000 __tmp_reg__
+     /tmp/ccJPDfdd.s:6      *ABS*:0000000000000001 __zero_reg__
+     /tmp/ccJPDfdd.s:12     .text:0000000000000000 ds1302_init
+     /tmp/ccJPDfdd.s:37     .text:000000000000000e ds1302_start
+     /tmp/ccJPDfdd.s:65     .text:000000000000001a ds1302_stop
+     /tmp/ccJPDfdd.s:92     .text:0000000000000026 ds1302_write_byte
+     /tmp/ccJPDfdd.s:158    .text:000000000000004e ds1302_read_byte
+     /tmp/ccJPDfdd.s:225    .text:0000000000000076 bcd_to_dec
+     /tmp/ccJPDfdd.s:250    .text:0000000000000088 dec_to_bcd
+     /tmp/ccJPDfdd.s:275    .text:000000000000009c ds1302_write
+     /tmp/ccJPDfdd.s:319    .text:00000000000000bc ds1302_read
+     /tmp/ccJPDfdd.s:360    .text:00000000000000dc ds1302_set_time
+     /tmp/ccJPDfdd.s:434    .text:0000000000000128 ds1302_get_time
+     /tmp/ccJPDfdd.s:511    .text:0000000000000170 button_pressed
+     /tmp/ccJPDfdd.s:599    .text:00000000000001c0 buzzer_on
+     /tmp/ccJPDfdd.s:615    .text:00000000000001c4 buzzer_off
+     /tmp/ccJPDfdd.s:645    .text.startup:0000000000000000 main
+     /tmp/ccJPDfdd.s:1122   .bss:0000000000000003 last_btn_set
+     /tmp/ccJPDfdd.s:1132   .bss:0000000000000005 mode
+     /tmp/ccJPDfdd.s:1127   .bss:0000000000000004 edit_field
+     /tmp/ccJPDfdd.s:1117   .bss:0000000000000002 last_btn_next
+     /tmp/ccJPDfdd.s:1112   .bss:0000000000000001 last_btn_up
+     /tmp/ccJPDfdd.s:1155   .data:0000000000000002 alarm1_hour
+     /tmp/ccJPDfdd.s:1149   .bss:0000000000000006 alarm1_min
+     /tmp/ccJPDfdd.s:1107   .bss:0000000000000000 last_btn_down
+     /tmp/ccJPDfdd.s:1143   .data:0000000000000001 alarm2_hour
+     /tmp/ccJPDfdd.s:1138   .data:0000000000000000 alarm2_min
+
+UNDEFINED SYMBOLS
+__udivmodqi4
+lcd_init
+lcd_clear
+__divmodhi4
+lcd_goto
+lcd_printf
+__do_copy_data
+__do_clear_bss
